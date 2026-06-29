@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Evidence-Based Research Assistant Agent</title>
+<meta name="description" content="A browser-based multi-agent research assistant: planning, TF-IDF retrieval, branch reasoning, and safety guardrails. Runs fully offline — no server, no API." />
+<style>
+  :root {
+    --bg: #0f1117;
+    --panel: #171a23;
+    --panel-2: #1e222d;
+    --border: #2a2f3c;
+    --text: #e6e8ee;
+    --muted: #9aa3b2;
+    --accent: #6ea8fe;
+    --accent-2: #7c5cff;
+    --green: #34d399;
+    --yellow: #fbbf24;
+    --red: #f87171;
+    --shadow: 0 8px 28px rgba(0,0,0,.35);
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: radial-gradient(1200px 600px at 80% -10%, #1b2030 0%, var(--bg) 55%);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.55;
+    min-height: 100vh;
+  }
+  a { color: var(--accent); }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 28px 20px 64px; }
+
+  header.hero {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+  .logo {
+    width: 52px; height: 52px; border-radius: 14px; flex: 0 0 auto;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    display: grid; place-items: center; font-size: 26px; box-shadow: var(--shadow);
+  }
+  h1 { font-size: 1.55rem; margin: 0; line-height: 1.2; }
+  .subtitle { color: var(--muted); margin: 2px 0 0; font-size: .95rem; max-width: 720px; }
+  .pill-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0 22px; }
+  .pill {
+    font-size: .72rem; letter-spacing: .3px; text-transform: uppercase;
+    color: var(--muted); border: 1px solid var(--border); background: var(--panel);
+    padding: 4px 10px; border-radius: 999px;
+  }
+
+  .card {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 18px 18px; box-shadow: var(--shadow);
+    margin-bottom: 18px;
+  }
+  .card h2 { font-size: 1.05rem; margin: 0 0 12px; }
+  label.field-label { display:block; font-size:.85rem; color: var(--muted); margin-bottom: 6px; }
+
+  textarea, select {
+    width: 100%; background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px;
+    font-size: .98rem; font-family: inherit; resize: vertical;
+  }
+  textarea:focus, select:focus { outline: none; border-color: var(--accent); }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; align-items: flex-end; }
+  .row > .grow { flex: 1 1 280px; }
+
+  .slider-box { flex: 0 0 220px; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .slider-val { color: var(--accent); font-weight: 600; }
+
+  button.primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    color: #0b0d12; font-weight: 700; border: none; border-radius: 10px;
+    padding: 12px 20px; font-size: 1rem; cursor: pointer; transition: transform .06s ease, filter .15s ease;
+  }
+  button.primary:hover { filter: brightness(1.07); }
+  button.primary:active { transform: translateY(1px); }
+  button.ghost {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 14px; font-size: .85rem; cursor: pointer;
+  }
+  button.ghost:hover { border-color: var(--accent); }
+
+  /* Pipeline visualization */
+  .pipeline { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+  .stage {
+    flex: 1 1 130px; min-width: 120px; background: var(--panel-2);
+    border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px;
+    position: relative; transition: border-color .25s, box-shadow .25s, opacity .25s;
+    opacity: .55;
+  }
+  .stage .stage-name { font-weight: 600; font-size: .9rem; }
+  .stage .stage-desc { color: var(--muted); font-size: .73rem; margin-top: 2px; }
+  .stage .stage-ico { font-size: 1.1rem; }
+  .stage.active { opacity: 1; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(110,168,254,.18); }
+  .stage.done { opacity: 1; border-color: var(--green); }
+  .stage.blocked { opacity: 1; border-color: var(--red); }
+
+  /* Metrics */
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap: 12px; }
+  .metric { background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+  .metric .m-label { color: var(--muted); font-size: .75rem; text-transform: uppercase; letter-spacing: .4px; }
+  .metric .m-value { font-size: 1.5rem; font-weight: 700; margin-top: 4px; }
+
+  .bar-track { background: var(--panel-2); border-radius: 999px; height: 10px; overflow: hidden; border: 1px solid var(--border); }
+  .bar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width .5s ease; }
+
+  .answer-box {
+    background: var(--panel-2); border: 1px solid var(--border); border-left: 4px solid var(--accent);
+    border-radius: 10px; padding: 16px; white-space: pre-wrap; font-size: .95rem;
+  }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 760px) { .two-col { grid-template-columns: 1fr; } }
+
+  ol.subq, ul.crit { margin: 6px 0 0; padding-left: 20px; }
+  ol.subq li, ul.crit li { margin-bottom: 6px; font-size: .92rem; }
+
+  .branch { margin-bottom: 10px; }
+  .branch .b-head { display: flex; justify-content: space-between; font-size: .82rem; color: var(--muted); margin-bottom: 4px; }
+  .branch.selected .b-head { color: var(--green); font-weight: 600; }
+
+  .evidence-item { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; overflow: hidden; }
+  .evidence-head {
+    display: flex; justify-content: space-between; gap: 10px; align-items: center;
+    background: var(--panel-2); padding: 10px 14px; cursor: pointer; font-size: .85rem;
+  }
+  .evidence-head .src { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent); }
+  .evidence-head .score-tag { color: var(--muted); }
+  .evidence-body { padding: 12px 14px; font-size: .9rem; color: var(--text); display: none; }
+  .evidence-item.open .evidence-body { display: block; }
+  .chev { transition: transform .2s; }
+  .evidence-item.open .chev { transform: rotate(90deg); }
+
+  .banner { border-radius: 10px; padding: 12px 14px; font-size: .9rem; margin-bottom: 14px; }
+  .banner.warn { background: rgba(251,191,36,.12); border: 1px solid var(--yellow); color: #fde68a; }
+  .banner.error { background: rgba(248,113,113,.12); border: 1px solid var(--red); color: #fecaca; }
+  .banner.ok { background: rgba(52,211,153,.12); border: 1px solid var(--green); color: #bbf7d0; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+  .tab { background: var(--panel); border: 1px solid var(--border); color: var(--muted);
+    padding: 8px 16px; border-radius: 999px; cursor: pointer; font-size: .88rem; }
+  .tab.active { color: var(--text); border-color: var(--accent); background: var(--panel-2); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .corpus-doc { margin-bottom: 12px; }
+  .corpus-doc summary { cursor: pointer; font-family: ui-monospace, Menlo, monospace; color: var(--accent); padding: 8px 0; }
+  .corpus-doc pre { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; white-space: pre-wrap; font-size: .82rem; color: var(--muted); }
+
+  .hidden { display: none !important; }
+  .muted { color: var(--muted); }
+  .mono { font-family: ui-monospace, Menlo, monospace; }
+  footer { text-align: center; color: var(--muted); font-size: .8rem; margin-top: 30px; }
+  details.raw pre { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; overflow:auto; font-size:.78rem; max-height: 340px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <div class="logo">🔬</div>
+    <div>
+      <h1>Evidence-Based Research Assistant Agent</h1>
+      <p class="subtitle">A multi-agent research workflow — planning, retrieval-augmented grounding, branch-based reasoning, and safety guardrails — running entirely in your browser.</p>
+    </div>
+  </header>
+  <div class="pill-row">
+    <span class="pill">100% offline</span>
+    <span class="pill">No API key</span>
+    <span class="pill">TF-IDF retrieval</span>
+    <span class="pill">Multi-agent</span>
+    <span class="pill">Guardrails</span>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <div class="tab active" data-tab="research">🔍 Research</div>
+    <div class="tab" data-tab="eval">📊 Evaluation</div>
+    <div class="tab" data-tab="corpus">📄 Corpus</div>
+    <div class="tab" data-tab="about">ℹ️ About</div>
+  </div>
+
+  <!-- ===================== RESEARCH TAB ===================== -->
+  <section class="tab-panel active" id="panel-research">
+    <div class="card">
+      <h2>Ask a research question</h2>
+      <div style="margin-bottom:12px;">
+        <label class="field-label" for="example">Start from an example (optional)</label>
+        <select id="example">
+          <option value="">— Type your own —</option>
+          <option>What are the effects of climate change on crop yields?</option>
+          <option>Why is retrieval important for a research assistant agent?</option>
+          <option>What safety guardrails should a research agent include?</option>
+        </select>
+      </div>
+      <label class="field-label" for="query">Research question</label>
+      <textarea id="query" rows="3" placeholder="e.g. What are the effects of climate change on crop yields?">What are the effects of climate change on crop yields?</textarea>
+      <div class="row" style="margin-top:14px;">
+        <div class="slider-box">
+          <label class="field-label">Retrieved evidence chunks: <span class="slider-val" id="topkVal">4</span></label>
+          <input type="range" id="topk" min="1" max="6" value="4" />
+        </div>
+        <div class="grow" style="text-align:right;">
+          <button class="primary" id="runBtn">🚀 Run Agent</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Agent pipeline</h2>
+      <div class="pipeline" id="pipeline"></div>
+    </div>
+
+    <div id="results" class="hidden"></div>
+  </section>
+
+  <!-- ===================== EVALUATION TAB ===================== -->
+  <section class="tab-panel" id="panel-eval">
+    <div class="card">
+      <h2>Evaluation on sample cases</h2>
+      <p class="muted" style="margin-top:0;">Runs the agent over built-in test cases and reports term coverage, evidence usage, confidence, and guardrail pass rate.</p>
+      <button class="primary" id="evalBtn">Run evaluation</button>
+      <div id="evalResults" style="margin-top:18px;"></div>
+    </div>
+  </section>
+
+  <!-- ===================== CORPUS TAB ===================== -->
+  <section class="tab-panel" id="panel-corpus">
+    <div class="card">
+      <h2>Local document corpus</h2>
+      <p class="muted" style="margin-top:0;">Synthetic, public-style documents used as the evidence base. Retrieval and citations refer only to these.</p>
+      <div id="corpusList"></div>
+    </div>
+  </section>
+
+  <!-- ===================== ABOUT TAB ===================== -->
+  <section class="tab-panel" id="panel-about">
+    <div class="card">
+      <h2>About this project</h2>
+      <p>This prototype demonstrates an <strong>autonomous, evidence-based research assistant</strong> built from cooperating agents rather than a single LLM prompt. A prompt-only model can hallucinate, miss contradictions, or make unsupported claims. Splitting the work into specialized agents — with retrieval grounding and explicit guardrails — makes the reasoning <em>transparent</em> and <em>checkable</em>.</p>
+      <h2 style="margin-top:18px;">Workflow</h2>
+      <pre class="mono" style="background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:14px;white-space:pre-wrap;font-size:.82rem;">User Query
+   → 🛡️ Input Guardrail   (block unsafe / private-data requests)
+   → 🗂️ Planner           (decompose into sub-questions)
+   → 🔎 Research          (TF-IDF retrieval over local corpus)
+   → 🧠 Analyst           (score reasoning branches, estimate confidence)
+   → ✍️ Writer            (synthesize evidence-referenced answer)
+   → 🛡️ Output Guardrail  (require grounding + evidence references)
+   → ✅ Final Answer</pre>
+      <h2 style="margin-top:18px;">Safety guardrails</h2>
+      <ul>
+        <li>Rejects private / confidential / sensitive-data requests.</li>
+        <li>Retrieves only from the local allowed corpus.</li>
+        <li>Requires evidence references in every answer.</li>
+        <li>Flags low-confidence answers for human review.</li>
+      </ul>
+      <p class="muted" style="margin-top:18px;">This browser version faithfully re-implements the Python prototype's <span class="mono">scikit-learn</span> TF-IDF retrieval (smooth IDF, L2 normalization, identical tokenizer and chunking), so retrieval scores match the original app exactly. No build step, no server, no external API — deployable on GitHub Pages or any static host.</p>
+    </div>
+  </section>
+
+  <footer>Evidence-Based Research Assistant Agent · capstone prototype · runs fully client-side</footer>
+</div>
+
+<script>
+/* ============================================================
+   EMBEDDED CORPUS (synthetic, public-style documents)
+   ============================================================ */
+const CORPUS = [
+  { source: "agent_safety_synthetic.txt", text:
+`Title: Synthetic Safety Note for Agentic Research Systems
+Source Type: Synthetic educational document
+
+Autonomous research agents require safety guardrails because they can retrieve information, reason across sources, and produce outputs that users may trust. Common risks include hallucinated claims, weak source grounding, overconfident summaries, unsafe use of private data, and failure to flag uncertainty.
+
+Safety controls should exist at multiple stages. Input guardrails can reject private or confidential data requests. Retrieval guardrails can restrict the system to trusted sources and require relevance thresholds. Reasoning guardrails can require the agent to separate supported claims from uncertain claims. Output guardrails can require citations or evidence references before presenting conclusions.
+
+Human intervention is important when user intent is ambiguous, evidence is contradictory, confidence is low, or the output could influence high-impact decisions. A safe system balances autonomy with accountability.` },
+  { source: "climate_agriculture_synthetic.txt", text:
+`Title: Synthetic Public Brief on Climate Change and Agriculture
+Source Type: Synthetic educational document
+
+Climate change can affect agricultural productivity through several pathways, including rising average temperatures, changes in precipitation patterns, increased frequency of extreme weather events, and changes in pest and disease pressure. Heat stress can reduce yields for temperature-sensitive crops such as wheat, maize, and rice, especially when high temperatures occur during flowering or grain-filling periods.
+
+Water availability is another major factor. In some regions, drought conditions reduce soil moisture and limit crop growth. In other regions, heavy rainfall and flooding can damage fields, delay planting, and increase disease risk. The impact is not uniform across all regions. Some cooler regions may experience longer growing seasons, while already warm regions may face larger productivity losses.
+
+Adaptation strategies include improved irrigation, heat-tolerant crop varieties, better forecasting systems, soil moisture management, and diversified planting schedules. Evidence-based planning requires comparing multiple sources because regional effects vary by crop, location, and time horizon.` },
+  { source: "rag_research_synthetic.txt", text:
+`Title: Synthetic Note on Retrieval-Augmented Generation for Research
+Source Type: Synthetic educational document
+
+Retrieval-Augmented Generation, or RAG, improves language model reliability by grounding responses in external documents. Instead of relying only on the model's internal parameters, a RAG system retrieves relevant passages from a document collection and supplies them as context for response generation.
+
+RAG is useful for research tasks because it supports source traceability, reduces hallucination risk, and enables the system to access updated or domain-specific knowledge. A typical RAG pipeline includes document ingestion, chunking, embedding, vector storage, query embedding, similarity search, and grounded answer generation.
+
+However, RAG can fail if retrieved chunks are irrelevant, outdated, low quality, or contradictory. Mitigation strategies include source filtering, re-ranking, retrieval thresholds, multi-source verification, and human review when evidence is insufficient or ambiguous.` },
+];
+
+const EVAL_CASES = [
+  { query: "What are the effects of climate change on crop yields?", expected_terms: ["temperature","precipitation","drought","region","adaptation"] },
+  { query: "Why is retrieval important for a research assistant agent?", expected_terms: ["grounding","external","source","hallucination","traceability"] },
+  { query: "What safety guardrails should a research agent include?", expected_terms: ["private","source","confidence","human","guardrails"] },
+];
+
+/* ============================================================
+   TF-IDF RETRIEVAL  (mirrors sklearn TfidfVectorizer:
+   stop_words="english", ngram_range=(1,2), smooth_idf, L2 norm)
+   Validated to match the Python prototype's scores exactly.
+   ============================================================ */
+const STOP = new Set(["a","about","above","across","after","afterwards","again","against","all","almost","alone","along","already","also","although","always","am","among","amongst","amoungst","amount","an","and","another","any","anyhow","anyone","anything","anyway","anywhere","are","around","as","at","back","be","became","because","become","becomes","becoming","been","before","beforehand","behind","being","below","beside","besides","between","beyond","bill","both","bottom","but","by","call","can","cannot","cant","co","con","could","couldnt","cry","de","describe","detail","do","done","down","due","during","each","eg","eight","either","eleven","else","elsewhere","empty","enough","etc","even","ever","every","everyone","everything","everywhere","except","few","fifteen","fifty","fill","find","fire","first","five","for","former","formerly","forty","found","four","from","front","full","further","get","give","go","had","has","hasnt","have","he","hence","her","here","hereafter","hereby","herein","hereupon","hers","herself","him","himself","his","how","however","hundred","i","ie","if","in","inc","indeed","interest","into","is","it","its","itself","keep","last","latter","latterly","least","less","ltd","made","many","may","me","meanwhile","might","mill","mine","more","moreover","most","mostly","move","much","must","my","myself","name","namely","neither","never","nevertheless","next","nine","no","nobody","none","noone","nor","not","nothing","now","nowhere","of","off","often","on","once","one","only","onto","or","other","others","otherwise","our","ours","ourselves","out","over","own","part","per","perhaps","please","put","rather","re","same","see","seem","seemed","seeming","seems","serious","several","she","should","show","side","since","sincere","six","sixty","so","some","somehow","someone","something","sometime","sometimes","somewhere","still","such","system","take","ten","than","that","the","their","them","themselves","then","thence","there","thereafter","thereby","therefore","therein","thereupon","these","they","thick","thin","third","this","those","though","three","through","throughout","thru","thus","to","together","too","top","toward","towards","twelve","twenty","two","un","under","until","up","upon","us","very","via","was","we","well","were","what","whatever","when","whence","whenever","where","whereafter","whereas","whereby","wherein","whereupon","wherever","whether","which","while","whither","who","whoever","whole","whom","whose","why","will","with","within","without","would","yet","you","your","yours","yourself","yourselves"]);
+
+function tokenize(text) {
+  const raw = text.toLowerCase().match(/\b\w\w+\b/g) || [];
+  return raw.filter((t) => !STOP.has(t));
+}
+function analyze(text) {  // unigrams + bigrams, built after stop-word removal
+  const toks = tokenize(text);
+  const out = toks.slice();
+  for (let i = 0; i < toks.length - 1; i++) out.push(toks[i] + " " + toks[i + 1]);
+  return out;
+}
+
+class LocalRetriever {
+  constructor(corpus, chunkSize = 120, overlap = 30) {
+    this.chunks = this._loadChunks(corpus, chunkSize, overlap);
+    this._buildIndex();
+  }
+  _loadChunks(corpus, chunkSize, overlap) {
+    const chunks = [];
+    const step = Math.max(1, chunkSize - overlap);
+    for (const { source, text } of corpus) {
+      const words = text.split(/\s+/).filter(Boolean);
+      for (let i = 0; i < words.length; i += step) {
+        const block = words.slice(i, i + chunkSize).join(" ");
+        if (block.split(/\s+/).filter(Boolean).length < 20) continue;
+        chunks.push({ doc_id: source.replace(/\.txt$/, ""), source, text: block, chunk_id: chunks.length });
+      }
+    }
+    return chunks;
+  }
+  _buildIndex() {
+    this.vocab = new Map();
+    this._docTokens = this.chunks.map((c) => analyze(c.text));
+    for (const toks of this._docTokens)
+      for (const t of new Set(toks)) if (!this.vocab.has(t)) this.vocab.set(t, this.vocab.size);
+    const n = this.chunks.length, V = this.vocab.size;
+    const df = new Float64Array(V);
+    for (const toks of this._docTokens) for (const t of new Set(toks)) df[this.vocab.get(t)]++;
+    this.idf = new Float64Array(V);
+    for (let j = 0; j < V; j++) this.idf[j] = Math.log((1 + n) / (1 + df[j])) + 1;  // smooth_idf
+    this.rows = this._docTokens.map((toks) => this._vectorize(toks));
+  }
+  _vectorize(toks) {
+    const tf = new Map();
+    for (const t of toks) tf.set(t, (tf.get(t) || 0) + 1);
+    const vec = new Map(); let norm = 0;
+    for (const [t, c] of tf) {
+      if (!this.vocab.has(t)) continue;
+      const j = this.vocab.get(t), w = c * this.idf[j];
+      vec.set(j, w); norm += w * w;
+    }
+    norm = Math.sqrt(norm) || 1;
+    for (const [j, w] of vec) vec.set(j, w / norm);  // L2 normalize
+    return vec;
+  }
+  static _cosine(a, b) {
+    let s = 0;
+    const [small, large] = a.size < b.size ? [a, b] : [b, a];
+    for (const [j, w] of small) if (large.has(j)) s += w * large.get(j);
+    return s;
+  }
+  search(query, topK = 4, minScore = 0.05) {
+    const qv = this._vectorize(analyze(query));
+    const scored = this.chunks.map((c, i) => ({ chunk: c, score: LocalRetriever._cosine(qv, this.rows[i]) }));
+    scored.sort((x, y) => y.score - x.score);
+    const out = [];
+    for (const { chunk, score } of scored) {
+      if (score < minScore) continue;
+      out.push({ doc_id: chunk.doc_id, source: chunk.source, text: chunk.text, score, chunk_id: chunk.chunk_id });
+      if (out.length >= topK) break;
+    }
+    return out;
+  }
+}
+
+/* ============================================================
+   AGENTS  (port of src/agents.py)
+   ============================================================ */
+const BLOCKED_TERMS = ["private email","confidential","proprietary","ssn","social security","password","medical record","client data"];
+
+const GuardrailAgent = {
+  checkInput(query) {
+    const lower = query.toLowerCase();
+    const matched = BLOCKED_TERMS.filter((t) => lower.includes(t));
+    if (matched.length)
+      return { allowed: false, reason: "The request appears to involve private, confidential, or sensitive data.", matched_terms: matched };
+    if (query.trim().length < 10)
+      return { allowed: false, reason: "The query is too short or ambiguous.", matched_terms: [] };
+    return { allowed: true, reason: null, matched_terms: [] };
+  },
+  checkOutput(answer, evidenceCount, confidence) {
+    const issues = [];
+    if (evidenceCount === 0) issues.push("No retrieved evidence was used.");
+    if (!answer.includes("Evidence references")) issues.push("Final answer does not include evidence references.");
+    if (confidence < 0.35) issues.push("Low confidence answer requires human review.");
+    return { passed: issues.length === 0, issues };
+  },
+};
+
+const PlannerAgent = {
+  plan(query) {
+    const base = query.trim().replace(/\?+$/, "");
+    return {
+      original_query: query,
+      sub_questions: [
+        `What are the most relevant facts for: ${base}?`,
+        `What evidence supports or limits conclusions about: ${base}?`,
+        `Are there contradictions, uncertainty, or boundary conditions for: ${base}?`,
+      ],
+      success_criteria: [
+        "answer is grounded in retrieved evidence",
+        "key uncertainty or limitations are stated",
+        "final response includes evidence references",
+      ],
+    };
+  },
+};
+
+const ResearchAgent = {
+  retrieve(retriever, plan, topK = 4) {
+    const combined = plan.original_query + " " + plan.sub_questions.join(" ");
+    return retriever.search(combined, topK);
+  },
+};
+
+const AnalystAgent = {
+  analyze(query, evidence) {
+    if (!evidence.length)
+      return { candidate_branches: [], selected_branch: { claim: "Insufficient evidence", support: [], score: 0.0 },
+               confidence: 0.0, needs_human_review: true, review_reason: "No relevant evidence was retrieved." };
+    const branches = [];
+    evidence.slice(0, 3).forEach((item, i) => {
+      const sentences = item.text.replace(/\n/g, " ").split(".").map((s) => s.trim()).filter((s) => s.length > 35);
+      const claim = sentences.length ? sentences[0] : item.text.slice(0, 220);
+      const score = Math.min(1.0, item.score + 0.15 * sentences.length);
+      branches.push({ branch_id: i + 1, claim, source: item.source, chunk_id: item.chunk_id,
+                      retrieval_score: round(item.score, 3), score: round(score, 3) });
+    });
+    const selected = branches.reduce((a, b) => (b.score > a.score ? b : a));
+    const confidence = round(branches.reduce((s, b) => s + b.score, 0) / branches.length, 3);
+    const needs = confidence < 0.35 || evidence.length < 2;
+    return { candidate_branches: branches, selected_branch: selected, confidence,
+             needs_human_review: needs,
+             review_reason: needs ? "Evidence is limited or confidence is below the review threshold." : null };
+  },
+};
+
+const WriterAgent = {
+  write(query, plan, evidence, analysis) {
+    if (!evidence.length)
+      return "I could not produce a fully grounded answer because no relevant evidence was retrieved. Human review or additional source material is required.\n\nEvidence references: none";
+    const points = evidence.slice(0, 4).map((item) => {
+      const snippet = item.text.replace(/\n/g, " ").slice(0, 280);
+      return `- [${item.source} | chunk ${item.chunk_id} | score ${item.score.toFixed(2)}] ${snippet}...`;
+    });
+    const uncertainty = analysis.needs_human_review ? `\n\nHuman review flag: ${analysis.review_reason}` : "";
+    return `Research question: ${query}
+
+Summary answer:
+Based on the retrieved evidence, the strongest supported conclusion is: ${analysis.selected_branch.claim || "No selected claim"}.
+
+Reasoning summary:
+The system decomposed the query into sub-questions, retrieved the most relevant document chunks, evaluated candidate reasoning branches, and selected the branch with the strongest evidence score. The answer should be interpreted within the scope of the local evidence corpus.
+
+Evidence references:
+${points.join("\n")}
+
+Confidence score: ${analysis.confidence.toFixed(2)}${uncertainty}
+`;
+  },
+};
+
+function round(x, d) { const f = Math.pow(10, d); return Math.round(x * f) / f; }
+
+/* ============================================================
+   CONTROLLER  (port of src/controller.py)
+   ============================================================ */
+const RETRIEVER = new LocalRetriever(CORPUS);
+
+function runController(query, topK = 4) {
+  const inputCheck = GuardrailAgent.checkInput(query);
+  if (!inputCheck.allowed)
+    return { status: "blocked", input_check: inputCheck, answer: `Request blocked: ${inputCheck.reason}` };
+  const plan = PlannerAgent.plan(query);
+  const evidence = ResearchAgent.retrieve(RETRIEVER, plan, topK);
+  const analysis = AnalystAgent.analyze(query, evidence);
+  const answer = WriterAgent.write(query, plan, evidence, analysis);
+  const outputCheck = GuardrailAgent.checkOutput(answer, evidence.length, analysis.confidence);
+  return { status: "completed", input_check: inputCheck, plan, evidence, analysis, output_check: outputCheck, answer };
+}
+
+/* ============================================================
+   UI WIRING
+   ============================================================ */
+const STAGES = [
+  { name: "Guardrail", ico: "🛡️", desc: "Screen the request" },
+  { name: "Planner", ico: "🗂️", desc: "Decompose query" },
+  { name: "Research", ico: "🔎", desc: "TF-IDF retrieval" },
+  { name: "Analyst", ico: "🧠", desc: "Score reasoning" },
+  { name: "Writer", ico: "✍️", desc: "Synthesize answer" },
+  { name: "Output Check", ico: "✅", desc: "Verify grounding" },
+];
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+
+function confidenceLabel(c) {
+  if (c >= 0.7) return ["High", "🟢", "var(--green)"];
+  if (c >= 0.35) return ["Moderate", "🟡", "var(--yellow)"];
+  return ["Low", "🔴", "var(--red)"];
+}
+
+function renderPipeline(states = {}) {
+  $("pipeline").innerHTML = STAGES.map((s) => {
+    const st = states[s.name] || "";
+    return `<div class="stage ${st}">
+      <div class="stage-ico">${s.ico}</div>
+      <div class="stage-name">${s.name}</div>
+      <div class="stage-desc">${s.desc}</div>
+    </div>`;
+  }).join("");
+}
+renderPipeline();
+
+// Tabs
+document.querySelectorAll(".tab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+    document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
+    tab.classList.add("active");
+    $("panel-" + tab.dataset.tab).classList.add("active");
+  });
+});
+
+// Slider + example
+$("topk").addEventListener("input", (e) => ($("topkVal").textContent = e.target.value));
+$("example").addEventListener("change", (e) => { if (e.target.value) $("query").value = e.target.value; });
+
+// Run agent with animated pipeline
+$("runBtn").addEventListener("click", async () => {
+  const query = $("query").value;
+  const topK = parseInt($("topk").value, 10);
+  const results = $("results");
+  results.classList.add("hidden");
+  results.innerHTML = "";
+
+  // animate stages
+  const order = ["Guardrail", "Planner", "Research", "Analyst", "Writer", "Output Check"];
+  const states = {};
+  renderPipeline(states);
+  const inputCheck = GuardrailAgent.checkInput(query);
+  for (let i = 0; i < order.length; i++) {
+    states[order[i]] = "active";
+    renderPipeline(states);
+    await sleep(180);
+    if (order[i] === "Guardrail" && !inputCheck.allowed) {
+      states[order[i]] = "blocked";
+      renderPipeline(states);
+      break;
+    }
+    states[order[i]] = "done";
+  }
+  renderPipeline(states);
+
+  const result = runController(query, topK);
+  renderResult(result);
+  results.classList.remove("hidden");
+  results.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function renderResult(result) {
+  const results = $("results");
+  if (result.status === "blocked") {
+    const c = result.input_check;
+    results.innerHTML = `<div class="card">
+      <div class="banner error">🚫 <strong>Request blocked by the input guardrail.</strong></div>
+      <p><strong>Reason:</strong> ${esc(c.reason)}</p>
+      ${c.matched_terms && c.matched_terms.length ? `<p><strong>Matched sensitive terms:</strong> ${c.matched_terms.map((t) => `<span class="mono">${esc(t)}</span>`).join(", ")}</p>` : ""}
+      <div class="answer-box">${esc(result.answer)}</div>
+    </div>`;
+    return;
+  }
+
+  const a = result.analysis, oc = result.output_check, ev = result.evidence, conf = a.confidence;
+  const [label, emoji, color] = confidenceLabel(conf);
+
+  let html = `<div class="card">
+    <h2>Result</h2>
+    <div class="metrics">
+      <div class="metric"><div class="m-label">Confidence</div><div class="m-value">${conf.toFixed(2)}</div></div>
+      <div class="metric"><div class="m-label">Confidence level</div><div class="m-value" style="color:${color}">${emoji} ${label}</div></div>
+      <div class="metric"><div class="m-label">Evidence chunks</div><div class="m-value">${ev.length}</div></div>
+      <div class="metric"><div class="m-label">Output guardrail</div><div class="m-value" style="color:${oc.passed ? "var(--green)" : "var(--yellow)"}">${oc.passed ? "✅ Passed" : "⚠️ Flagged"}</div></div>
+    </div>
+    <div style="margin-top:14px;">
+      <div class="bar-track"><div class="bar-fill" style="width:${Math.min(100, Math.max(0, conf * 100))}%"></div></div>
+      <div class="muted" style="font-size:.8rem;margin-top:4px;">Confidence: ${Math.round(conf * 100)}%</div>
+    </div>
+    ${a.needs_human_review ? `<div class="banner warn" style="margin-top:14px;">⚠️ <strong>Human review recommended:</strong> ${esc(a.review_reason)}</div>` : ""}
+  </div>`;
+
+  html += `<div class="card"><h2>📝 Final Answer</h2><div class="answer-box">${esc(result.answer)}</div></div>`;
+
+  // Plan + Analysis
+  const plan = result.plan;
+  let branchesHtml = "";
+  if (a.candidate_branches.length) {
+    const maxScore = Math.max(...a.candidate_branches.map((b) => b.score), 0.0001);
+    branchesHtml = a.candidate_branches.map((b) => {
+      const sel = b.branch_id === a.selected_branch.branch_id;
+      return `<div class="branch ${sel ? "selected" : ""}">
+        <div class="b-head"><span>Branch #${b.branch_id} ${sel ? "✓ selected" : ""} · <span class="mono">${esc(b.source)}</span></span><span>${b.score.toFixed(3)}</span></div>
+        <div class="bar-track"><div class="bar-fill" style="width:${(b.score / maxScore) * 100}%;${sel ? "background:linear-gradient(90deg,var(--green),#10b981);" : ""}"></div></div>
+      </div>`;
+    }).join("");
+  } else {
+    branchesHtml = `<p class="muted">No reasoning branches were produced (no evidence).</p>`;
+  }
+
+  html += `<div class="two-col">
+    <div class="card">
+      <h2>🗂️ Research Plan</h2>
+      <strong style="font-size:.85rem;">Sub-questions</strong>
+      <ol class="subq">${plan.sub_questions.map((q) => `<li>${esc(q)}</li>`).join("")}</ol>
+      <strong style="font-size:.85rem;">Success criteria</strong>
+      <ul class="crit">${plan.success_criteria.map((c) => `<li>${esc(c)}</li>`).join("")}</ul>
+    </div>
+    <div class="card">
+      <h2>🧠 Analysis</h2>
+      <p class="muted" style="font-size:.82rem;margin-top:0;">Candidate reasoning branch scores</p>
+      ${branchesHtml}
+    </div>
+  </div>`;
+
+  // Evidence
+  let evHtml = "";
+  if (!ev.length) {
+    evHtml = `<p class="muted">No evidence cleared the relevance threshold for this query.</p>`;
+  } else {
+    evHtml = ev.map((item, i) => `<div class="evidence-item ${i === 0 ? "open" : ""}">
+      <div class="evidence-head" onclick="this.parentElement.classList.toggle('open')">
+        <span><span class="chev">▶</span> <span class="src">${esc(item.source)}</span> · chunk ${item.chunk_id}</span>
+        <span class="score-tag">score ${item.score.toFixed(3)}</span>
+      </div>
+      <div class="evidence-body">
+        <div class="bar-track" style="margin-bottom:8px;"><div class="bar-fill" style="width:${Math.min(100, item.score * 100)}%"></div></div>
+        ${esc(item.text)}
+      </div>
+    </div>`).join("");
+  }
+  html += `<div class="card"><h2>📎 Retrieved Evidence</h2>${evHtml}</div>`;
+
+  // Guardrails + raw trace
+  html += `<div class="two-col">
+    <div class="card">
+      <h2>🛡️ Guardrail Checks</h2>
+      <strong style="font-size:.85rem;">Input check</strong>
+      <div class="banner ok" style="margin-top:6px;">✅ Allowed</div>
+      <strong style="font-size:.85rem;">Output check</strong>
+      ${oc.passed ? `<div class="banner ok" style="margin-top:6px;">All output guardrails passed.</div>`
+        : oc.issues.map((iss) => `<div class="banner warn" style="margin-top:6px;">${esc(iss)}</div>`).join("")}
+    </div>
+    <div class="card">
+      <h2>🔧 Raw trace</h2>
+      <p class="muted" style="font-size:.8rem;margin-top:0;">Full structured result from the controller.</p>
+      <details class="raw"><summary class="muted" style="cursor:pointer;">Show JSON</summary><pre>${esc(JSON.stringify(result, null, 2))}</pre></details>
+    </div>
+  </div>`;
+
+  results.innerHTML = html;
+}
+
+/* ===== Evaluation tab ===== */
+$("evalBtn").addEventListener("click", () => {
+  const rows = EVAL_CASES.map((cse) => {
+    const r = runController(cse.query);
+    const ansLower = (r.answer || "").toLowerCase();
+    const matched = cse.expected_terms.filter((t) => ansLower.includes(t.toLowerCase()));
+    const coverage = matched.length / Math.max(1, cse.expected_terms.length);
+    const conf = r.analysis ? r.analysis.confidence : 0;
+    return {
+      query: cse.query, expected: cse.expected_terms.length, matched: matched.length,
+      coverage: round(coverage, 2), evidence: (r.evidence || []).length, confidence: conf,
+      passed: r.output_check ? r.output_check.passed : false, status: r.status,
+    };
+  });
+  const avgCov = round(rows.reduce((s, r) => s + r.coverage, 0) / rows.length, 2);
+  const avgConf = round(rows.reduce((s, r) => s + r.confidence, 0) / rows.length, 2);
+  const passRate = Math.round((rows.filter((r) => r.passed).length / rows.length) * 100);
+
+  $("evalResults").innerHTML = `
+    <div class="metrics" style="margin-bottom:16px;">
+      <div class="metric"><div class="m-label">Avg term coverage</div><div class="m-value">${avgCov.toFixed(2)}</div></div>
+      <div class="metric"><div class="m-label">Avg confidence</div><div class="m-value">${avgConf.toFixed(2)}</div></div>
+      <div class="metric"><div class="m-label">Guardrail pass rate</div><div class="m-value">${passRate}%</div></div>
+    </div>
+    <table>
+      <thead><tr><th>Query</th><th class="num">Coverage</th><th class="num">Matched</th><th class="num">Evidence</th><th class="num">Confidence</th><th>Guardrail</th></tr></thead>
+      <tbody>${rows.map((r) => `<tr>
+        <td>${esc(r.query)}</td>
+        <td class="num">${r.coverage.toFixed(2)}</td>
+        <td class="num">${r.matched}/${r.expected}</td>
+        <td class="num">${r.evidence}</td>
+        <td class="num">${r.confidence.toFixed(2)}</td>
+        <td>${r.passed ? "✅" : "⚠️"}</td>
+      </tr>`).join("")}</tbody>
+    </table>`;
+});
+
+/* ===== Corpus tab ===== */
+$("corpusList").innerHTML = CORPUS.map((d) => `<details class="corpus-doc">
+  <summary>${esc(d.source)}</summary>
+  <pre>${esc(d.text)}</pre>
+</details>`).join("") +
+`<p class="muted" style="font-size:.82rem;">${CORPUS.length} documents · ${RETRIEVER.chunks.length} indexed chunks</p>`;
+</script>
+</body>
+</html>

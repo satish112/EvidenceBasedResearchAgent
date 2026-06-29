@@ -1,0 +1,14 @@
+[
+  {
+    "query": "What are the effects of climate change on crop yields?",
+    "expected_terms": ["temperature", "precipitation", "drought", "region", "adaptation"]
+  },
+  {
+    "query": "Why is retrieval important for a research assistant agent?",
+    "expected_terms": ["grounding", "external", "source", "hallucination", "traceability"]
+  },
+  {
+    "query": "What safety guardrails should a research agent include?",
+    "expected_terms": ["private", "source", "confidence", "human", "guardrails"]
+  }
+]

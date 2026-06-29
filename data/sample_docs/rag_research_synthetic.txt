@@ -1,0 +1,8 @@
+Title: Synthetic Note on Retrieval-Augmented Generation for Research
+Source Type: Synthetic educational document
+
+Retrieval-Augmented Generation, or RAG, improves language model reliability by grounding responses in external documents. Instead of relying only on the model's internal parameters, a RAG system retrieves relevant passages from a document collection and supplies them as context for response generation.
+
+RAG is useful for research tasks because it supports source traceability, reduces hallucination risk, and enables the system to access updated or domain-specific knowledge. A typical RAG pipeline includes document ingestion, chunking, embedding, vector storage, query embedding, similarity search, and grounded answer generation.
+
+However, RAG can fail if retrieved chunks are irrelevant, outdated, low quality, or contradictory. Mitigation strategies include source filtering, re-ranking, retrieval thresholds, multi-source verification, and human review when evidence is insufficient or ambiguous.

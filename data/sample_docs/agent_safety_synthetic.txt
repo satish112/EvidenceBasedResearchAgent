@@ -1,0 +1,8 @@
+Title: Synthetic Safety Note for Agentic Research Systems
+Source Type: Synthetic educational document
+
+Autonomous research agents require safety guardrails because they can retrieve information, reason across sources, and produce outputs that users may trust. Common risks include hallucinated claims, weak source grounding, overconfident summaries, unsafe use of private data, and failure to flag uncertainty.
+
+Safety controls should exist at multiple stages. Input guardrails can reject private or confidential data requests. Retrieval guardrails can restrict the system to trusted sources and require relevance thresholds. Reasoning guardrails can require the agent to separate supported claims from uncertain claims. Output guardrails can require citations or evidence references before presenting conclusions.
+
+Human intervention is important when user intent is ambiguous, evidence is contradictory, confidence is low, or the output could influence high-impact decisions. A safe system balances autonomy with accountability.
