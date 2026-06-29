@@ -90,16 +90,11 @@ Try it locally by simply opening the file in a browser:
 open docs/index.html        # macOS  (or just double-click it)
 ```
 
-### Deploy free on GitHub Pages
+### Live Website
 
-1. Push this repository to GitHub.
-2. Go to **Settings → Pages**.
-3. Under **Build and deployment → Source**, choose **Deploy from a branch**.
-4. Select branch `main` and folder **`/docs`**, then **Save**.
-5. Your app will be live at `https://<your-username>.github.io/<repo-name>/`.
+The app is published on GitHub Pages. Access it here:
 
-The same `docs/index.html` also works on Netlify, Vercel, Cloudflare Pages, or any
-static file host — just point it at the `docs/` folder.
+**https://satish112.github.io/EvidenceBasedResearchAgent/**
 
 ## Run Evaluation
 
