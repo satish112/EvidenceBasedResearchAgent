@@ -146,6 +146,4 @@ The system includes:
 
 ## GitHub Repository
 
-Add your public GitHub URL here after creating the repository:
-
-`https://github.com/<your-username>/research-assistant-agent`
+`https://github.com/satish112/EvidenceBasedResearchAgent`
